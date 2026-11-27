@@ -1,4 +1,4 @@
--- 1. Базова інформація про акаунти
+-- 1. Combine account and session data to retrieve basic account information, email preferences, verification status, unsubscribe status, and country.
 WITH account_base AS (
   SELECT
     ac.id AS account_id,
@@ -7,8 +7,6 @@ WITH account_base AS (
     ac.send_interval,
     ac.is_verified,
     ac.is_unsubscribed
-
-
   FROM `DA.account` ac
   JOIN `DA.account_session` acs
     ON ac.id = acs.account_id
@@ -19,7 +17,7 @@ WITH account_base AS (
 ),
 
 
--- 2. Метрики створених акаунтів
+-- 2. Calculate the number of unique accounts grouped by date, country, send interval, verification status, and unsubscribe status.
 account_metrics AS (
   SELECT
     account_date AS date,
@@ -31,8 +29,6 @@ account_metrics AS (
     0 AS sent_msg,
     0 AS open_msg,
     0 AS visit_msg
-
-
   FROM account_base
   GROUP BY
     date,
@@ -43,7 +39,7 @@ account_metrics AS (
 ),
 
 
--- 3. Базова інформація про відправлені листи
+-- 3. Combine email, account, and session data to retrieve sent email information and calculate the actual email send date.
 email_sent_base AS (
   SELECT
     es.id_message AS message_id,
@@ -53,8 +49,6 @@ email_sent_base AS (
     ac.send_interval,
     ac.is_verified,
     ac.is_unsubscribed
-
-
   FROM `DA.email_sent` es
   JOIN `DA.account` ac
     ON es.id_account = ac.id
@@ -67,7 +61,7 @@ email_sent_base AS (
 ),
 
 
--- 4. Метрики по email
+-- 4. Calculate the number of unique sent, opened, and clicked emails grouped by date, country, send interval, verification status, and unsubscribe status.
 email_metrics AS (
   SELECT
     es.date,
@@ -77,13 +71,8 @@ email_metrics AS (
     es.is_unsubscribed,
     0 AS account_cnt,
     COUNT(DISTINCT es.message_id) AS sent_msg,
-    COUNT(DISTINCT CASE WHEN eo.id_message IS NOT NULL THEN es.message_id
-      END
-    ) AS open_msg,
-    COUNT(DISTINCT CASE WHEN ev.id_message IS NOT NULL THEN es.message_id
-      END
-    ) AS visit_msg
-   
+    COUNT(DISTINCT CASE WHEN eo.id_message IS NOT NULL THEN es.message_id END) AS open_msg,
+    COUNT(DISTINCT CASE WHEN ev.id_message IS NOT NULL THEN es.message_id END) AS visit_msg
   FROM email_sent_base es
   LEFT JOIN `DA.email_open` eo
     ON es.message_id = eo.id_message
@@ -98,7 +87,7 @@ email_metrics AS (
 ),
 
 
--- 5. Об'єдную метрики акаунтів та email через Union
+-- 5. Combine account and email metrics into a single dataset using UNION ALL.
 united_data AS (
   SELECT
     date,
@@ -112,9 +101,7 @@ united_data AS (
     visit_msg
   FROM account_metrics
 
-
   UNION ALL
-
 
   SELECT
     date,
@@ -130,7 +117,7 @@ united_data AS (
 ),
 
 
--- 6. Підсумовую метрики
+-- 6. Aggregate account and email metrics by date, country, send interval, verification status, and unsubscribe status.
 aggregated_data AS (
   SELECT
     date,
@@ -142,8 +129,6 @@ aggregated_data AS (
     SUM(sent_msg) AS sent_msg,
     SUM(open_msg) AS open_msg,
     SUM(visit_msg) AS visit_msg
-
-
   FROM united_data
   GROUP BY
     date,
@@ -154,29 +139,25 @@ aggregated_data AS (
 ),
 
 
--- 7. Рахую загальні значення по кожній країні
+-- 7. Calculate the total number of accounts and sent emails per country using window functions.
 country_totals AS (
   SELECT *,
     SUM(account_cnt) OVER (PARTITION BY country) AS total_country_account_cnt,
     SUM(sent_msg) OVER (PARTITION BY country) AS total_country_sent_cnt
-
-
   FROM aggregated_data
 ),
 
 
--- 8. Рахую рейтинг країн за кількістю акаунтів та кількістю відправлених листів
+-- 8. Rank countries by the total number of accounts and sent emails using DENSE_RANK().
 country_ranks AS (
   SELECT *,
     DENSE_RANK() OVER (ORDER BY total_country_account_cnt DESC) AS rank_total_country_account_cnt,
     DENSE_RANK() OVER (ORDER BY total_country_sent_cnt DESC) AS rank_total_country_sent_cnt
-
-
   FROM country_totals
 )
 
 
--- 9. Залишаю країни, які входять у топ 10 хоча б за одним із двох рейтингів
+-- 9. Select countries ranked in the top 10 by either total account count or total sent email count.
 SELECT
   date,
   country,
@@ -191,16 +172,10 @@ SELECT
   total_country_sent_cnt,
   rank_total_country_account_cnt,
   rank_total_country_sent_cnt
-
-
 FROM country_ranks
-
-
 WHERE
   rank_total_country_account_cnt <= 10
   OR rank_total_country_sent_cnt <= 10
-
-
 ORDER BY
   date,
   country;
