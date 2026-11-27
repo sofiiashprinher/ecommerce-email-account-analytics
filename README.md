@@ -3,7 +3,7 @@
 
 ## Project Overview
 
-This project focuses on analyzing account creation and email engagement using SQL in Google BigQuery and visualizing the results in Looker Studio.
+This project focuses on analyzing account creation and email engagement using SQL in Google BigQuery and visualizing the results in Data Studio (formerly Looker Studio).
 
 The analysis includes:
 - Account distribution across countries.
@@ -15,7 +15,7 @@ The analysis includes:
 ## Tools Used
 
 - SQL (Google BigQuery)
-- Looker Studio
+- Data Studio
 
 ## SQL Code
 
